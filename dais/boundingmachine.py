@@ -3,7 +3,6 @@ import jax
 import variationaldist as vd
 import momdist as md
 from jax.flatten_util import ravel_pytree
-import functools
 import ais_utils
 
 
@@ -77,6 +76,7 @@ def compute_ratio(seed, params_flat, unflatten, params_fixed, log_prob):
     dim, nbridges, lfsteps = params_fixed
 
     if nbridges >= 1:
+        # setup betas by transforming the gridref
         gridref_y = np.cumsum(params["mgridref_y"]) / np.sum(params["mgridref_y"])
         gridref_y = np.concatenate([np.array([0.0]), gridref_y])
         betas = np.interp(params["target_x"], params["gridref_x"], gridref_y)
