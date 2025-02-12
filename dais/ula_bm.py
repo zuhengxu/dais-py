@@ -3,25 +3,24 @@ import jax
 import variationaldist as vd
 import momdist as md
 from jax.flatten_util import ravel_pytree
-import ais_utils
-from nn import amortize_eps_nn
 import functools
+from mcd_utils import sample_kernel, log_prob_kernel
+from nn import initialize_mcd_network, amortize_eps_nn
 
 
 def initialize(
     dim,
     vdparams=None,
     nbridges=0,
-    lfsteps=1,
-    eps=0.0,
+    eps=0.01,
+    gamma=10.0,
     eta=0.5,
-    mdparams=None,
     ngridb=32,
     mgridref_y=None,
-    trainable=["eps", "eta"],
-    epsmode = "amortize",
-    epsdim = 1,
-    epsbound = 0.25,
+    trainable=["eps"],
+    mode="DAIS_ULA_TC",
+    epsdim=1,
+    epsbound=0.5,
 ):
     params_train = {}  # Has all trainable parameters
     params_notrain = {}  # Non trainable parameters
@@ -36,29 +35,28 @@ def initialize(
             params_notrain["vd"] = vd.initialize(dim)
 
     if "eps" in trainable:
-        if epsmode == "amortize":
+        if mode in ["DAIS_ULA_TC", "DAIS_ULA"]:
             init_fun_eps, apply_fun_eps = amortize_eps_nn(epsdim, epsbound)
             params_train["eps"] = init_fun_eps(jax.random.PRNGKey(1), (-1, 1))[1]
         else:
             apply_fun_eps = None
             params_train["eps"] = eps
+            print("No stepsize network needed by the method.")
     else:
         apply_fun_eps = None
         params_notrain["eps"] = eps
+        print("No stepsize network needed by the method.")
+
+
+    if "gamma" in trainable:
+        params_train["gamma"] = gamma
+    else:
+        params_notrain["gamma"] = gamma
 
     if "eta" in trainable:
         params_train["eta"] = eta
     else:
         params_notrain["eta"] = eta
-
-    if "md" in trainable:
-        params_train["md"] = mdparams
-        if mdparams is None:
-            params_train["md"] = md.initialize(dim)
-    else:
-        params_notrain["md"] = mdparams
-        if mdparams is None:
-            params_notrain["md"] = md.initialize(dim)
 
     # Everything related to betas
     if mgridref_y is not None:
@@ -75,7 +73,8 @@ def initialize(
         params_notrain["mgridref_y"] = mgridref_y
 
     # Other fixed parameters
-    params_fixed = (dim, nbridges, lfsteps, apply_fun_eps)
+    time_correct_bw = True if mode == "DAIS_ULA_TC" else False
+    params_fixed = (dim, nbridges, time_correct_bw, apply_fun_eps)
     params_flat, unflatten = ravel_pytree((params_train, params_notrain))
     return params_flat, unflatten, params_fixed
 
@@ -84,10 +83,9 @@ def compute_ratio(seed, params_flat, unflatten, params_fixed, log_prob):
     params_train, params_notrain = unflatten(params_flat)
     params_notrain = jax.lax.stop_gradient(params_notrain)
     params = {**params_train, **params_notrain}  # Gets all parameters in single place
-    dim, nbridges, lfsteps, apply_fun_eps = params_fixed
+    dim, nbridges, _, _ = params_fixed
 
     if nbridges >= 1:
-        # setup betas by transforming the gridref
         gridref_y = np.cumsum(params["mgridref_y"]) / np.sum(params["mgridref_y"])
         gridref_y = np.concatenate([np.array([0.0]), gridref_y])
         betas = np.interp(params["target_x"], params["gridref_x"], gridref_y)
@@ -98,27 +96,17 @@ def compute_ratio(seed, params_flat, unflatten, params_fixed, log_prob):
     z = vd.sample_rep(rng_key, params["vd"])
     w = -vd.log_prob(params["vd"], z)
 
-    # Evolve UHA and update weight
-    delta_H = np.array([0.0])
+    # Evolve ULA and compute weights
     if nbridges >= 1:
         rng_key, rng_key_gen = jax.random.split(rng_key_gen)
-        if apply_fun_eps is not None:
-            z, w_mom, delta_H = ais_utils.evolve_amortize(
-                z, betas, params, rng_key, params_fixed, log_prob
-            ) 
-        else:
-            z, w_mom, delta_H = ais_utils.evolve(
-                z, betas, params, rng_key, params_fixed, log_prob
-            )
+        z, w_mom, _ = evolve_ula_amortize(
+            z, betas, params, rng_key, params_fixed, log_prob, sample_kernel, log_prob_kernel
+        )
         w += w_mom
 
     # Update weight with final model evaluation
     w = w + log_prob(z)
-    delta_H = np.max(np.abs(delta_H))
-    # delta_H = np.mean(np.abs(delta_H))
-    return -1.0 * w, (z, delta_H)
-
-
+    return -1.0 * w, (z, _)
 
 
 # @functools.partial(jax.jit, static_argnums = (2, 3, 4))
@@ -128,3 +116,66 @@ def compute_bound(seeds, params_flat, unflatten, params_fixed, log_prob):
     )
     logz_est = jax.scipy.special.logsumexp(-ratios) - np.log(ratios.shape[0])
     return ratios.mean(), (ratios.mean(), logz_est, z)
+
+
+def evolve_ula_amortize(
+    z,
+    betas,
+    params,
+    rng_key_gen,
+    params_fixed,
+    log_prob_model,
+    sample_kernel,
+    log_prob_kernel,
+):
+    dim, nbridges, time_correct_bw, apply_fun_eps = params_fixed
+
+    def U(z, beta):
+        return -1.0 * (
+            beta * log_prob_model(z) + (1.0 - beta) * vd.log_prob(params["vd"], z)
+        )
+
+    def evolve(aux, i):
+        z, w, rng_key_gen = aux
+        beta = betas[i]
+        beta_prev = betas[i - 1]
+
+        # Forward kernel
+        fk_mean = z - apply_fun_eps(params["eps"], np.array([beta])) * jax.grad(U)(
+            z, beta
+        )  # - because it is gradient of U = -log \pi
+        scale = np.sqrt(2 * apply_fun_eps(params["eps"], np.array([beta])))
+
+        # Sample
+        rng_key, rng_key_gen = jax.random.split(rng_key_gen)
+        z_new = sample_kernel(rng_key, fk_mean, scale)
+
+        # Backwards kernel
+        if time_correct_bw:
+            bk_mean = z_new - apply_fun_eps(params["eps"], np.array([beta_prev])) * jax.grad(U)(
+                z_new, beta
+            ) # recover Thin et al. but with time corrected bw kernel 
+            scale_prev = np.sqrt(2 * apply_fun_eps(params["eps"], np.array([beta_prev])))
+        else:
+            bk_mean = z_new - apply_fun_eps(params["eps"], np.array([beta])) * jax.grad(U)(
+                z_new, beta
+            ) # Ignoring NN, assuming initialization, recovers method from Thin et al.
+            scale_prev = np.sqrt(2 * apply_fun_eps(params["eps"], np.array([beta])))
+
+        # Evaluate kernels
+        fk_log_prob = log_prob_kernel(z_new, fk_mean, scale)
+        bk_log_prob = log_prob_kernel(z, bk_mean, scale_prev)
+
+        # Update weight and return
+        w += bk_log_prob - fk_log_prob
+        rng_key, rng_key_gen = jax.random.split(rng_key_gen)
+        aux = z_new, w, rng_key_gen
+        return aux, None
+
+    # Evolve system
+    rng_key, rng_key_gen = jax.random.split(rng_key_gen)
+    aux = (z, 0, rng_key_gen)
+    aux, _ = jax.lax.scan(evolve, aux, np.arange(nbridges)[1:])
+
+    z, w, _ = aux
+    return z, w, None

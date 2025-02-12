@@ -18,8 +18,8 @@ def adam(step_size, b1=0.9, b2=0.999, eps=1e-8):
     def update(i, g, state, unflatten, trainable):
         def project(x, unflatten, trainable):
             x_train, x_notrain = unflatten(x)
-            if "eps" in trainable:
-                x_train["eps"] = np.clip(x_train["eps"], 0.0000001, 0.5)
+            # if "eps" in trainable:
+            #     x_train["eps"] = np.clip(x_train["eps"], 0.0000001, 0.5)
             if "eta" in trainable:
                 x_train["eta"] = np.clip(x_train["eta"], 0, 0.99)
             if "gamma" in trainable:
@@ -103,16 +103,16 @@ def run(
     # 	return [], True, None
 
 
-def run_repl(
-    batchsize,
-    lr,
+def run_with_track(
+    log_prob_model,
+    grad_and_loss, batchsize, lr,
     iters,
     params_flat,
     unflatten,
     params_fixed,
-    log_prob_model,
-    grad_and_loss,
     trainable,
+    callback_eval,
+    eval_batchsize,
     rng_key_gen,
 ):
     # try:
@@ -121,6 +121,7 @@ def run_repl(
     opt_state = opt_init(params_flat)
     losses = []
     logzs = []
+    logzs_eval = []
     tracker = {"eps": [], "gamma": []}
     looper = tqdm(range(iters))
     for i in looper:
@@ -130,13 +131,24 @@ def run_repl(
     
         tracker["eps"].append(collect_eps(params_flat, unflatten, trainable))
         tracker["gamma"].append(collect_gamma(params_flat, unflatten, trainable))
+
+        # compute grad and loss for training
         grad, (loss, logz_est, _) = grad_and_loss(
             seeds, params_flat, unflatten, params_fixed, log_prob_model
         )
         losses.append(loss.item())
         logzs.append(logz_est.item())
+
+        # evaluation tracking
+        seeds_eval = jax.random.randint(rng_key, (eval_batchsize,), 1, 1e6)
+        _, (_, logz_eval, _) = callback_eval(
+            seeds_eval, params_flat, unflatten, params_fixed, log_prob_model
+        )
+        logzs_eval.append(logz_eval.item())
+        
         if np.isnan(loss):
             print("Diverged")
-            return [], [], True, params_flat, tracker
+            return [], [], [], True, params_flat, tracker
         opt_state = update(i, grad, opt_state, unflatten, trainable)
-    return logzs, losses, False, params_flat, tracker
+
+    return logzs_eval, logzs, losses, False, params_flat, tracker

@@ -80,4 +80,3 @@ def amortize_eps_nn(outputdim, b):
 # x = np.array(0.1)  # Example input
 # outputs = apply_fun(params, x)
 # outputs
-# print(outputs)

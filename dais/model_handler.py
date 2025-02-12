@@ -9,7 +9,7 @@ import models.seeds as model_seeds
 import inference_gym.using_jax as gym
 
 
-models_gym = ['lorenz', 'brownian', 'banana']
+models_gym = ['lorenz', 'brownian', 'banana', 'cox']
 
 def load_model(model = 'log_sonar'):
 	if model in models_gym:
@@ -27,6 +27,9 @@ def load_model_gym(model='banana'):
 		target = gym.targets.BrownianMotionUnknownScalesMissingMiddleObservations()
 	if model == 'banana':
 		target = gym.targets.Banana()
+	if model == 'cox':
+		target = gym.targets.SyntheticLogGaussianCoxProcess()
+	
 	target = gym.targets.VectorModel(target, flatten_sample_transformations=True)
 	dim = target.event_shape[0]
 	return log_prob_model, dim
