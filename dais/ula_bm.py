@@ -1,11 +1,11 @@
 import jax.numpy as np
 import jax
 import variationaldist as vd
+import numpyro.distributions as npdist
 import momdist as md
 from jax.flatten_util import ravel_pytree
 import functools
-from mcd_utils import sample_kernel, log_prob_kernel
-from nn import initialize_mcd_network, amortize_eps_nn
+from nn import amortize_eps_nn
 
 
 def initialize(
@@ -116,6 +116,17 @@ def compute_bound(seeds, params_flat, unflatten, params_fixed, log_prob):
     )
     logz_est = jax.scipy.special.logsumexp(-ratios) - np.log(ratios.shape[0])
     return ratios.mean(), (ratios.mean(), logz_est, z)
+
+
+
+# For transition kernel
+def sample_kernel(rng_key, mean, scale):
+	eps = jax.random.normal(rng_key, shape = (mean.shape[0],))
+	return mean + scale * eps
+
+def log_prob_kernel(x, mean, scale):
+	dist = npdist.Independent(npdist.Normal(loc=mean, scale=scale), 1)
+	return dist.log_prob(x)
 
 
 def evolve_ula_amortize(
