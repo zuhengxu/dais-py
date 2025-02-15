@@ -1,11 +1,10 @@
 import jax.numpy as np
 import jax
-import variationaldist as vd
 import numpyro.distributions as npdist
-import momdist as md
 from jax.flatten_util import ravel_pytree
 import functools
-from nn import amortize_eps_nn
+from . import variationaldist as vd
+from .nn import amortize_eps_nn
 
 
 def initialize(
@@ -46,7 +45,6 @@ def initialize(
         apply_fun_eps = None
         params_notrain["eps"] = eps
         print("No stepsize network needed by the method.")
-
 
     if "gamma" in trainable:
         params_train["gamma"] = gamma
@@ -100,7 +98,14 @@ def compute_ratio(seed, params_flat, unflatten, params_fixed, log_prob):
     if nbridges >= 1:
         rng_key, rng_key_gen = jax.random.split(rng_key_gen)
         z, w_mom, _ = evolve_ula_amortize(
-            z, betas, params, rng_key, params_fixed, log_prob, sample_kernel, log_prob_kernel
+            z,
+            betas,
+            params,
+            rng_key,
+            params_fixed,
+            log_prob,
+            sample_kernel,
+            log_prob_kernel,
         )
         w += w_mom
 
@@ -118,15 +123,15 @@ def compute_bound(seeds, params_flat, unflatten, params_fixed, log_prob):
     return ratios.mean(), (ratios.mean(), logz_est, z)
 
 
-
 # For transition kernel
 def sample_kernel(rng_key, mean, scale):
-	eps = jax.random.normal(rng_key, shape = (mean.shape[0],))
-	return mean + scale * eps
+    eps = jax.random.normal(rng_key, shape=(mean.shape[0],))
+    return mean + scale * eps
+
 
 def log_prob_kernel(x, mean, scale):
-	dist = npdist.Independent(npdist.Normal(loc=mean, scale=scale), 1)
-	return dist.log_prob(x)
+    dist = npdist.Independent(npdist.Normal(loc=mean, scale=scale), 1)
+    return dist.log_prob(x)
 
 
 def evolve_ula_amortize(
@@ -163,14 +168,20 @@ def evolve_ula_amortize(
 
         # Backwards kernel
         if time_correct_bw:
-            bk_mean = z_new - apply_fun_eps(params["eps"], np.array([beta_prev])) * jax.grad(U)(
+            bk_mean = z_new - apply_fun_eps(
+                params["eps"], np.array([beta_prev])
+            ) * jax.grad(U)(
                 z_new, beta
-            ) # recover Thin et al. but with time corrected bw kernel 
-            scale_prev = np.sqrt(2 * apply_fun_eps(params["eps"], np.array([beta_prev])))
+            )  # recover Thin et al. but with time corrected bw kernel
+            scale_prev = np.sqrt(
+                2 * apply_fun_eps(params["eps"], np.array([beta_prev]))
+            )
         else:
-            bk_mean = z_new - apply_fun_eps(params["eps"], np.array([beta])) * jax.grad(U)(
+            bk_mean = z_new - apply_fun_eps(params["eps"], np.array([beta])) * jax.grad(
+                U
+            )(
                 z_new, beta
-            ) # Ignoring NN, assuming initialization, recovers method from Thin et al.
+            )  # Ignoring NN, assuming initialization, recovers method from Thin et al.
             scale_prev = np.sqrt(2 * apply_fun_eps(params["eps"], np.array([beta])))
 
         # Evaluate kernels

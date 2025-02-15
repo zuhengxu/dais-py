@@ -1,15 +1,12 @@
-from jax import grad, vmap
-import jax.numpy as np
 import jax
 import numpyro
 from jax.flatten_util import ravel_pytree
-import numpyro.distributions as npdists
 import models.logistic_regression as model_lr
 import models.seeds as model_seeds
 import inference_gym.using_jax as gym
 
 
-models_gym = ['lorenz', 'brownian', 'banana', 'cox']
+models_gym = ['lorenz', 'brownian', 'banana', 'cox', 'neal']
 
 def load_model(model = 'log_sonar'):
 	if model in models_gym:
@@ -18,21 +15,23 @@ def load_model(model = 'log_sonar'):
 
 
 def load_model_gym(model='banana'):
-	def log_prob_model(z):
-		x = target.default_event_space_bijector(z)
-		return (target.unnormalized_log_prob(x) + target.default_event_space_bijector.forward_log_det_jacobian(z, event_ndims = 1))
-	if model == 'lorenz':
-		target = gym.targets.ConvectionLorenzBridge()
-	if model == 'brownian':
-		target = gym.targets.BrownianMotionUnknownScalesMissingMiddleObservations()
-	if model == 'banana':
-		target = gym.targets.Banana()
-	if model == 'cox':
-		target = gym.targets.SyntheticLogGaussianCoxProcess()
-	
-	target = gym.targets.VectorModel(target, flatten_sample_transformations=True)
-	dim = target.event_shape[0]
-	return log_prob_model, dim
+    def log_prob_model(z):
+        x = target.default_event_space_bijector(z)
+        return (target.unnormalized_log_prob(x) + target.default_event_space_bijector.forward_log_det_jacobian(z, event_ndims = 1))
+    if model == 'lorenz':
+        target = gym.targets.ConvectionLorenzBridge()
+    if model == 'brownian':
+        target = gym.targets.BrownianMotionUnknownScalesMissingMiddleObservations()
+    if model == 'banana':
+        target = gym.targets.Banana()
+    if model == 'cox':
+        target = gym.targets.SyntheticLogGaussianCoxProcess()
+    if model == 'neal':
+        target = gym.targets.NealsFunnel()
+
+    target = gym.targets.VectorModel(target, flatten_sample_transformations=True)
+    dim = target.event_shape[0]
+    return log_prob_model, dim
 
 
 def load_model_other(model = 'log_sonar'):

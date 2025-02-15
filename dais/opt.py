@@ -2,7 +2,6 @@ import jax.numpy as np
 import jax
 from jax.flatten_util import ravel_pytree
 from tqdm import tqdm
-import sys
 import functools
 
 
@@ -104,13 +103,13 @@ def run(
 
 
 def run_with_track(
-    log_prob_model,
-    grad_and_loss, batchsize, lr,
+    log_prob_model, grad_and_loss, batchsize, lr,
     iters,
     params_flat,
     unflatten,
     params_fixed,
     trainable,
+    ncall_func,
     callback_eval,
     eval_batchsize,
     rng_key_gen,
@@ -121,8 +120,12 @@ def run_with_track(
     opt_state = opt_init(params_flat)
     losses = []
     logzs = []
-    logzs_eval = []
+    ndensity_call = 0
+    ngrad_call = 0
+
+    savings = {"n_lpdf_eval": [], "n_grad_eval": [], "logzs_eval": []}
     tracker = {"eps": [], "gamma": []}
+
     looper = tqdm(range(iters))
     for i in looper:
         rng_key, rng_key_gen = jax.random.split(rng_key_gen)
@@ -144,11 +147,18 @@ def run_with_track(
         _, (_, logz_eval, _) = callback_eval(
             seeds_eval, params_flat, unflatten, params_fixed, log_prob_model
         )
-        logzs_eval.append(logz_eval.item())
+        savings["logzs_eval"].append(logz_eval.item())
         
+        # count forward and backward calls
+        _nlpdfs, _ngrads = ncall_func(params_fixed, batchsize) 
+        ndensity_call += _nlpdfs
+        ngrad_call += _ngrads
+        savings["n_lpdf_eval"].append(ndensity_call)
+        savings["n_grad_eval"].append(ngrad_call)
+
         if np.isnan(loss):
             print("Diverged")
-            return [], [], [], True, params_flat, tracker
+            return savings, [], [], True, params_flat, tracker
         opt_state = update(i, grad, opt_state, unflatten, trainable)
 
-    return logzs_eval, logzs, losses, False, params_flat, tracker
+    return savings, logzs, losses, False, params_flat, tracker

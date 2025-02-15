@@ -1,4 +1,4 @@
-import vardist.diag_gauss as diagvd
+from .vardist import diag_gauss as diagvd
 
 def initialize(dim):
 	return diagvd.initialize(dim)
