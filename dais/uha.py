@@ -15,8 +15,6 @@ def initialize(
     eps=0.0,
     eta=0.5,
     mdparams=None,
-    ngridb=32,
-    mgridref_y=None,
     trainable=["eps", "eta"],
     epsmode = "amortize",
     epsdim = 1,
@@ -60,14 +58,7 @@ def initialize(
             params_notrain["md"] = md.initialize(dim)
 
     # Everything related to betas
-    if mgridref_y is not None:
-        ngridb = mgridref_y.shape[0] - 1
-    else:
-        if nbridges < ngridb:
-            ngridb = nbridges
-        mgridref_y = np.ones(ngridb + 1) * 1.0
-    params_notrain["gridref_x"] = np.linspace(0, 1, ngridb + 2)
-    params_notrain["target_x"] = np.linspace(0, 1, nbridges + 2)[1:-1]
+    mgridref_y = np.ones(nbridges)
     if "mgridref_y" in trainable:
         params_train["mgridref_y"] = mgridref_y
     else:
@@ -88,8 +79,7 @@ def compute_ratio(seed, params_flat, unflatten, params_fixed, log_prob):
     if nbridges >= 1:
         # setup betas by transforming the gridref
         gridref_y = np.cumsum(params["mgridref_y"]) / np.sum(params["mgridref_y"])
-        gridref_y = np.concatenate([np.array([0.0]), gridref_y])
-        betas = np.interp(params["target_x"], params["gridref_x"], gridref_y)
+        betas = np.concatenate([np.array([0.0]), gridref_y])
 
     rng_key_gen = jax.random.PRNGKey(seed)
 
@@ -127,8 +117,6 @@ def compute_bound(seeds, params_flat, unflatten, params_fixed, log_prob):
     )
     logz_est = jax.scipy.special.logsumexp(-ratios) - np.log(ratios.shape[0])
     return ratios.mean(), (ratios.mean(), logz_est, z)
-
-
 
 
 
