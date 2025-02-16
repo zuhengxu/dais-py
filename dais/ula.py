@@ -74,6 +74,11 @@ def compute_ratio(seed, params_flat, unflatten, params_fixed, log_prob):
         gridref_y = np.cumsum(params["mgridref_y"]) / np.sum(params["mgridref_y"])
         betas = np.concatenate([np.array([0.0]), gridref_y])
 
+        # nbridges = 5
+        # mgridref_y = np.ones(nbridges)
+        # gridref_y = np.cumsum(mgridref_y) / np.sum(mgridref_y)
+        # betas = np.concatenate([np.array([0.0]), gridref_y])
+
     rng_key_gen = jax.random.PRNGKey(seed)
 
     rng_key, rng_key_gen = jax.random.split(rng_key_gen)
@@ -203,7 +208,7 @@ def evolve_ula_amortize(
     aux = (z, 0, rng_key_gen)
 
     aux, _ = first_evolve(aux)
-    aux, _ = jax.lax.scan(evolve, aux, np.arange(nbridges)[2:])
+    aux, _ = jax.lax.scan(evolve, aux, np.arange(2, nbridges+1))
 
     z, w, _ = aux
     return z, w, None

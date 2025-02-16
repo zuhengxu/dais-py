@@ -1,5 +1,6 @@
 import os
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+os.environ["JAX_ENABLE_X64"] = "true"
 import sys
 sys.path.insert(1, os.path.join(sys.path[0], "../"))
 
@@ -19,7 +20,7 @@ def main(
     eval_bs=1024,
     lr=0.001,
     nbridge=64,
-    epsbound=0.25,
+    epsbound=0.1,
     res_dir="results",
 ):
     fname = f"{res_dir}/{target_name}/ula/nbridge_{nbridge}_lr_{lr}_bs_{batchsize}_id_{id}.csv"
@@ -41,7 +42,6 @@ def main(
         eps=0.00001,
         vdparams=None,
         trainable=trainable,
-        mode="DAIS_ULA_TC",
         epsdim=dim,
         epsbound=epsbound,
     )
@@ -76,7 +76,7 @@ def main(
     df.to_csv(fname, index=False)
     return df
 
-main(niters = 5000)
+# df = main(niters = 2000)
 
 if __name__ == "__main__":
     import argparse
@@ -99,10 +99,10 @@ if __name__ == "__main__":
     )
     args_parser.add_argument("--lr", type=float, default=0.01, help="Learning rate.")
     args_parser.add_argument(
-        "--epsbound", type=float, default=0.25, help="Bound for stepsize."
+        "--epsbound", type=float, default=0.1, help="Bound for stepsize."
     )
     args_parser.add_argument(
-        "--id", type=int, default=-1, help="Unique ID for each run."
+        "--id", type=int, default=1, help="Unique ID for each run."
     )
     args = args_parser.parse_args()
 

@@ -1,5 +1,6 @@
 import os
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+os.environ["JAX_ENABLE_X64"] = "true"
 import sys
 sys.path.insert(1, os.path.join(sys.path[0], "../"))
 
