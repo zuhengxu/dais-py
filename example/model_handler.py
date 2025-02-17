@@ -1,6 +1,7 @@
 import jax
 import numpyro
 from jax.flatten_util import ravel_pytree
+from pandas import qcut
 import models.logistic_regression as model_lr
 import models.seeds as model_seeds
 import inference_gym.using_jax as gym
@@ -14,6 +15,25 @@ def load_model(model = 'log_sonar'):
 	return load_model_other(model)
 
 
+# import numpy as rnp
+# locations = rnp.stack(rnp.meshgrid(rnp.arange(40), rnp.arange(40)),
+#                      -1).astype(rnp.float64).reshape((-1, 2))
+# extents = rnp.ones(1600)
+# dummy_counts = 1600 * rnp.ones(1600)
+# model = gym.targets.LogGaussianCoxProcess(
+#     train_locations=locations, train_extents=extents, train_counts=dummy_counts)
+
+# target = gym.targets.VectorModel(model, flatten_sample_transformations=True)
+# dim = target.event_shape[0]
+
+# def log_prob_model(z):
+#     x = target.default_event_space_bijector(z)
+#     return (target.unnormalized_log_prob(x) + target.default_event_space_bijector.forward_log_det_jacobian(z, event_ndims = 1))
+
+# # generate std normal random sample of dim = dim
+# z = jax.random.normal(jax.random.PRNGKey(0), (dim,)).astype(jax.numpy.float64)
+# print(log_prob_model(z))
+
 def load_model_gym(model='banana'):
     def log_prob_model(z):
         x = target.default_event_space_bijector(z)
@@ -25,7 +45,7 @@ def load_model_gym(model='banana'):
     if model == 'banana':
         target = gym.targets.Banana()
     if model == 'cox':
-        target = gym.targets.SyntheticLogGaussianCoxProcess()
+        target = gym.targets.syntheticloggaussiancoxprocess()
     if model == 'neal':
         target = gym.targets.NealsFunnel()
 
