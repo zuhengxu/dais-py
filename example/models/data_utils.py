@@ -1,5 +1,6 @@
 # import jax.numpy as np
 import numpy as onp
+import pickle
 # import sklearn.preprocessing
 
 
@@ -18,3 +19,10 @@ def standardize_and_pad(X):
 	std[std == 0] = 1.
 	X = (X - mean) / std
 	return pad_with_const(X)
+
+def load_data(path: str):
+    with open(path, mode="rb") as f:
+        x, y = pickle.load(f)
+    y = (y + 1) // 2
+    x = standardize_and_pad(x)
+    return x, y

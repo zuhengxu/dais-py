@@ -82,7 +82,7 @@ def run_uha(
     df.to_csv(fname, index=False)
     return df
 
-# df = run_uha(niters = 3000, optimize_vd = True, id = 1)
+# df = run_uha(target_name="coxpine", niters = 1000, optimize_vd = True, id = 1)
 
 if __name__ == "__main__":
     import argparse
