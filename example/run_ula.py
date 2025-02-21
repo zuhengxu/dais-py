@@ -12,9 +12,10 @@ from model_handler import load_model
 import pandas as pd
 
 
-def main(
+def run_ula(
     id=1,
     target_name="brownian",
+    optimize_vd=False,
     niters=500,
     batchsize=32,
     eval_bs=1024,
@@ -23,7 +24,7 @@ def main(
     epsbound=0.1,
     res_dir="results",
 ):
-    fname = f"{res_dir}/{target_name}/ula/nbridge_{nbridge}_lr_{lr}_bs_{batchsize}_id_{id}.csv"
+    fname = f"{res_dir}/{target_name}/ula/vd_{optimize_vd}_nbridge_{nbridge}_lr_{lr}_bs_{batchsize}_id_{id}.csv"
     os.makedirs(os.path.dirname(fname), exist_ok=True)
 
     if os.path.exists(fname):
@@ -33,8 +34,10 @@ def main(
     log_prob_model, dim = load_model(target_name)
     rng_key_gen = jax.random.PRNGKey(id)
 
-    # trainable = ("vd", "eps", "eta", "mgridref_y")
-    trainable = ("eps", "eta", "mgridref_y")  # no vd param training
+    if optimize_vd:
+        trainable = ("vd", "eps", "eta", "mgridref_y")
+    else:
+        trainable = ("eps", "eta", "mgridref_y")  # no vd param training
     params_flat, unflatten, params_fixed = ula.initialize(
         dim=dim,
         nbridges=nbridge,
@@ -76,12 +79,15 @@ def main(
     df.to_csv(fname, index=False)
     return df
 
-# df = main(niters = 2000)
+# df = run_ula(niters = 3000, optimize_vd = False, id = 1)
 
 if __name__ == "__main__":
     import argparse
 
     args_parser = argparse.ArgumentParser(description="Process arguments")
+    args_parser.add_argument(
+        "--vd", type=bool, default=False, help="Whether to optimize the variational reference distribution."
+    )
     args_parser.add_argument(
         "--target", type=str, default="brownian", help="Target to fit"
     )
@@ -106,9 +112,10 @@ if __name__ == "__main__":
     )
     args = args_parser.parse_args()
 
-    main(
+    run_ula(
         id=args.id,
         target_name=args.target,
+        optimize_vd=args.vd,
         niters=args.niters,
         batchsize=args.bs,
         lr=args.lr,
