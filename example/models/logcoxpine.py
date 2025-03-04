@@ -241,7 +241,7 @@ class LogGaussianCoxPines(Distribution):
     def __init__(
         self,
         file_path: str = "models/datasets/fpines.csv",
-        use_whitened: bool = False,
+        use_whitened: bool = True,
         dim: int = 1600,
         is_target: bool = False,
     ):

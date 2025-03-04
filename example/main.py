@@ -1,5 +1,4 @@
 import os
-# os.environ["JAX_PLATFORMS"] = ''
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 os.environ["JAX_ENABLE_X64"] = "true"
 import sys
@@ -9,7 +8,6 @@ sys.path.insert(1, os.path.join(sys.path[0], "../"))
 from run_uha import run_uha
 from run_ula import run_ula
 import submitit
-
 
 def main(
     method="uha",
@@ -60,7 +58,7 @@ def submit_jobs():
 
     # Set up Slurm parameters
     executor.update_parameters(
-        slurm_array_parallelism=64,
+        slurm_array_parallelism=128,
         mem_gb=16,  # Memory in GB
         gpus_per_node=1,  # Number of GPUs
         cpus_per_task=2,  # Number of CPUs
@@ -81,8 +79,8 @@ def submit_jobs():
     ids = range(1, 33)
     # targets = ["brownian", "neal", "log_sonar"]
     targets = ["coxpine"]
-    vds = [True, False]
-    lrs = [0.001, 0.0001]
+    vds = [False]
+    lrs = [0.01, 0.001, 0.0001]
     ntemps = [32, 64]
     ebs_uha = [0.25]
     ebs_ula = [0.1]
@@ -122,4 +120,3 @@ def submit_jobs():
 
 if __name__ == "__main__":
     submit_jobs() 
- 
