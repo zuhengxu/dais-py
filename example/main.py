@@ -77,9 +77,8 @@ def submit_jobs():
     # Define the hyperparameters to sweep through
     methods = ["uha", "ula"]
     ids = range(1, 33)
-    # targets = ["brownian", "neal", "log_sonar"]
-    targets = ["coxpine"]
-    vds = [False]
+    targets = ["brownian", "neal", "log_sonar", "coxpine"]
+    vds = [False, True]
     lrs = [0.01, 0.001, 0.0001]
     ntemps = [32, 64]
     ebs_uha = [0.25]
